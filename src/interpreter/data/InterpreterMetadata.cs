@@ -1,7 +1,7 @@
 ﻿namespace sonlanglib.interpreter.data;
 
 public class InterpreterMetadata {
-    private readonly Dictionary<string, Variable> _variables;
+    private Dictionary<string, Variable> _variables;
 
 
     public InterpreterMetadata() {
@@ -19,5 +19,9 @@ public class InterpreterMetadata {
     public Variable? GetVariable(string name) {
         _variables.TryGetValue(name, out var var);
         return var;
+    }
+
+    public void LoadVariables(Dictionary<string, Variable> vars) {
+        _variables = vars;
     }
 }

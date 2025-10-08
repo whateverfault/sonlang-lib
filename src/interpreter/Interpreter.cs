@@ -16,6 +16,8 @@ public class Interpreter {
     
     public Calculator? Calculator { get; private set; }
 
+    public event EventHandler<Variable>? OnVariableChanged; 
+
 
     public Interpreter() {
         OperationList.Initialize(this);
@@ -47,7 +49,11 @@ public class Interpreter {
     
     public Variable? SetVariable(string name, string val, VariableType type) {
         if (string.IsNullOrEmpty(name)) return null;
-        return _metaData.SetVariable(name, type, val);
+        
+        var result = _metaData.SetVariable(name, type, val);
+        OnVariableChanged?.Invoke(this, result);
+
+        return result;
     }
 
     public ExpressionTokenType VarTypeToTokenType(VariableType varType) {
@@ -173,5 +179,9 @@ public class Interpreter {
         return string.IsNullOrEmpty(name)? 
                    null :
                    _metaData.GetVariable(name);
+    }
+
+    public void LoadVars(Dictionary<string, Variable> vars) {
+        _metaData.LoadVariables(vars);
     }
 }
