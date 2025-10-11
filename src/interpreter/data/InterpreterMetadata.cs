@@ -8,8 +8,8 @@ public class InterpreterMetadata {
         _variables = new Dictionary<string, Variable>();
     }
     
-    public Variable SetVariable(string name, VariableType type, string val) {
-        var var = new Variable(name, type, val);
+    public Variable SetVariable(string name, VariableType type, List<string> vals) {
+        var var = new Variable(name, type, vals);
         if (!_variables.TryAdd(name, var)) {
             _variables[name] = var;
         }

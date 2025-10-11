@@ -4,17 +4,22 @@ public enum VariableType {
     String,
     Number,
     Bool,
+    Array,
 }
 
 public class Variable {
-    public string Name { get; private set; }
-    public VariableType Type { get; private set; }
-    public string Value { get; private set; }
-
+    public string Name { get; }
     
-    public Variable(string name, VariableType type, string value) {
+    public VariableType Type { get; }
+    
+    public List<string> Values { get; }
+    
+    public string Value => Values[0];
+    
+    
+    public Variable(string name, VariableType type, List<string> values) {
         Name = name;
         Type = type;
-        Value = value;
+        Values = values;
     }
 }

@@ -1,4 +1,6 @@
-﻿using sonlanglib.interpreter.data;
+﻿using sonlanglib.interpreter.calculator;
+using sonlanglib.interpreter.conversion;
+using sonlanglib.interpreter.data;
 using sonlanglib.interpreter.error;
 using sonlanglib.interpreter.lexer;
 using sonlanglib.shared;
@@ -8,6 +10,9 @@ namespace sonlanglib.interpreter.parser;
 
 public class TokenParser {
     private readonly Interpreter _interpreter;
+
+    private Calculator? Calculator => _interpreter.Calculator;
+    private TypeConverter? Converter => _interpreter.TypeConverter;
     
     
     public TokenParser(Interpreter interpreter) {
@@ -24,12 +29,14 @@ public class TokenParser {
             Parse(nodes, i); break;
         }
         
-        if (_interpreter.Calculator == null) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.NotInitialized);
+        if (Calculator == null
+         || Converter == null) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.NotInitialized);
+
         if (nodes.Count <= 0) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.SmthWentWrong);
-        if (nodes.Count == 1 && !_interpreter.IsOperation(nodes[0].Data)) {
+        if (nodes.Count == 1 && !Converter.IsOperation(nodes[0].Data)) {
             var node = nodes[0];
             if (node.Data.Type == ExpressionTokenType.Name) {
-                if (!_interpreter.AssignVarToName(node.Data)) {
+                if (!Converter.AssignVarToName(node.Data)) {
                     return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.UnknownIdentifier);
                 }
             }
@@ -51,7 +58,7 @@ public class TokenParser {
                     scopeEndIndex = i; break;
                 }
                 
-                if (!_interpreter.IsOperation(data)
+                if (!Converter.IsOperation(data)
                  || node.Left != null 
                  || node.Right != null) continue;
                 
@@ -83,7 +90,7 @@ public class TokenParser {
 
             if (!ResolveVariables(nodes[maxIndex])) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.UnknownIdentifier);
             
-            var result = _interpreter.Calculator.Calculate(new BinaryTree<ExpressionToken>(nodes[maxIndex]));
+            var result = Calculator.Calculate(new BinaryTree<ExpressionToken>(nodes[maxIndex]));
             if (!result.Ok) return new Result<BinaryTree<ExpressionToken>, Error?>(null, result.Error);
             if (result.Value == null) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.SmthWentWrong);
             
@@ -95,9 +102,11 @@ public class TokenParser {
     }
 
     private OpScope GetOperationScope(int pos, List<BinaryTreeNode<ExpressionToken>> nodes) {
+        if (Converter == null) return OpScope.None;
+        
         var scope = OpScope.None;
-        if (pos > 0 && _interpreter.IsValue(nodes[pos - 1].Data)) scope = OpScope.Left;
-        if (pos < nodes.Count - 1 && _interpreter.IsValue(nodes[pos + 1].Data)) {
+        if (pos > 0 && Converter.IsValue(nodes[pos - 1].Data)) scope = OpScope.Left;
+        if (pos < nodes.Count - 1 && Converter.IsValue(nodes[pos + 1].Data)) {
             scope = scope == OpScope.Left ? OpScope.LeftRight : OpScope.Right;
         }
 
@@ -105,6 +114,8 @@ public class TokenParser {
     }
     
     private bool ResolveVariables(BinaryTreeNode<ExpressionToken> node) {
+        if (Converter == null) return false;
+        
         var data = node.Data;
         if (data.Type != ExpressionTokenType.ArithmeticOperation) return true;
 
@@ -112,9 +123,9 @@ public class TokenParser {
         var right = node.Right;
         
         if (left?.Data.Type == ExpressionTokenType.Name) {
-            if (!_interpreter.AssignVarToName(left.Data)) return false;
+            if (!Converter.AssignVarToName(left.Data)) return false;
         }
 
-        return right?.Data.Type != ExpressionTokenType.Name || _interpreter.AssignVarToName(right.Data);
+        return right?.Data.Type != ExpressionTokenType.Name || Converter.AssignVarToName(right.Data);
     }
 }

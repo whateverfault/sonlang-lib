@@ -1,4 +1,5 @@
-﻿using sonlanglib.interpreter.data;
+﻿using sonlanglib.interpreter.conversion;
+using sonlanglib.interpreter.data;
 using sonlanglib.interpreter.error;
 using sonlanglib.interpreter.lexer;
 using sonlanglib.shared;
@@ -7,11 +8,11 @@ using sonlanglib.shared.trees;
 namespace sonlanglib.interpreter.calculator;
 
 public class Calculator {
-    private readonly Interpreter _interpreter;
+    private readonly TypeConverter _converter;
     
     
-    public Calculator(Interpreter interpreter) {
-        _interpreter = interpreter;
+    public Calculator(TypeConverter converter) {
+        _converter = converter;
     }
     
     public Result<ExpressionToken?, Error?> Calculate(BinaryTree<ExpressionToken> expression) {
@@ -29,7 +30,7 @@ public class Calculator {
         
         while (true) {
             var data = current.Data;
-            if (!_interpreter.IsOperation(current.Data)) current = current.Parent;
+            if (!_converter.IsOperation(current.Data)) current = current.Parent;
             if (current == null) {
                 current = root;
                 break;
@@ -62,7 +63,7 @@ public class Calculator {
         }
 
         if (current.Data.Type == ExpressionTokenType.Name) {
-            if (!_interpreter.AssignVarToName(current.Data)) return new Result<ExpressionToken?, Error?>(null, Error.UnknownIdentifier);
+            if (!_converter.AssignVarToName(current.Data)) return new Result<ExpressionToken?, Error?>(null, Error.UnknownIdentifier);
         }
         return new Result<ExpressionToken?, Error?>(current.Data, null);
     }

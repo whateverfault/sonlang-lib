@@ -1,4 +1,5 @@
-﻿using sonlanglib.interpreter.data;
+﻿using sonlanglib.interpreter.conversion;
+using sonlanglib.interpreter.data;
 using sonlanglib.interpreter.error;
 using sonlanglib.interpreter.lexer;
 using sonlanglib.shared;
@@ -7,11 +8,11 @@ using sonlanglib.shared.trees;
 namespace sonlanglib.interpreter.executor;
 
 public class OperationExecutor {
-    private readonly Interpreter _interpreter;
+    private readonly TypeConverter _converter;
     
     
-    public OperationExecutor(Interpreter interpreter) {
-        _interpreter = interpreter;
+    public OperationExecutor(TypeConverter converter) {
+        _converter = converter;
     }
     
     public Result<ExpressionToken?, Error?> Execute(BinaryTree<ExpressionToken> expression) {
@@ -29,7 +30,7 @@ public class OperationExecutor {
         
         while (true) {
             var data = current.Data;
-            if (!_interpreter.IsOperation(data)) current = current.Parent;
+            if (!_converter.IsOperation(data)) current = current.Parent;
             if (current == null) {
                 current = root;
                 break;

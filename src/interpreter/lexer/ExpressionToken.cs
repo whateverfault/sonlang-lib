@@ -5,6 +5,7 @@ public enum ExpressionTokenType {
     Number,
     Bool,
     String,
+    Array,
     SpecialOperation,
     ArithmeticOperation,
     ClosingParenthesis,
