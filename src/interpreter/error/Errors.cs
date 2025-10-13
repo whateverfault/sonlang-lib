@@ -45,7 +45,7 @@ internal static class Errors {
                                                                          ),
                                                          new Localization(
                                                                           new Dictionary<Language, string> {
-                                                                                  { Language.English, "Invalid Synstax."},
+                                                                                  { Language.English, "Invalid Syntax."},
                                                                                   { Language.Russian, "Неверный синтаксис."},
                                                                               }
                                                                          ),

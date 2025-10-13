@@ -39,7 +39,7 @@ public class OperationExecutor {
             var left = current.Left?.Data;
             var right = current.Right?.Data;
             
-            var operation = OperationList.GetOperation(data.Value); 
+            var operation = OperationList.GetOperation(data.Value.Val); 
             if (data.Type == ExpressionTokenType.SpecialOperation
              && left == null
              && right == null) {

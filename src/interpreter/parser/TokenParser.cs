@@ -11,8 +11,8 @@ namespace sonlanglib.interpreter.parser;
 public class TokenParser {
     private readonly Interpreter _interpreter;
 
-    private Calculator? Calculator => _interpreter.Calculator;
-    private TypeConverter? Converter => _interpreter.TypeConverter;
+    private Calculator Calculator => _interpreter.Calculator;
+    private TypeConverter Converter => _interpreter.TypeConverter;
     
     
     public TokenParser(Interpreter interpreter) {
@@ -28,9 +28,6 @@ public class TokenParser {
             nodes.RemoveAt(i);
             Parse(nodes, i); break;
         }
-        
-        if (Calculator == null
-         || Converter == null) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.NotInitialized);
 
         if (nodes.Count <= 0) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.SmthWentWrong);
         if (nodes.Count == 1 && !Converter.IsOperation(nodes[0].Data)) {
@@ -62,7 +59,7 @@ public class TokenParser {
                  || node.Left != null 
                  || node.Right != null) continue;
                 
-                var op = OperationList.GetOperation(data.Value, GetOperationScope(i, nodes));
+                var op = OperationList.GetOperation(data.Value.Val, GetOperationScope(i, nodes));
                 if (op == null) continue;
 
                 if ((int)op.Priority <= maxPriority) continue;
@@ -88,22 +85,20 @@ public class TokenParser {
                 nodes.RemoveAt(maxIndex + 1); --scopeEndIndex;
             }
 
-            if (!ResolveVariables(nodes[maxIndex])) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.UnknownIdentifier);
+            if (!ResolveVariables(nodes[maxIndex], maxOp)) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.UnknownIdentifier);
             
             var result = Calculator.Calculate(new BinaryTree<ExpressionToken>(nodes[maxIndex]));
             if (!result.Ok) return new Result<BinaryTree<ExpressionToken>, Error?>(null, result.Error);
             if (result.Value == null) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.SmthWentWrong);
             
             nodes[maxIndex].Data.Type = result.Value.Type;
-            nodes[maxIndex].Data.Value = result.Value.Value;
+            nodes[maxIndex].Data.Values = result.Value.Values;
         } while (scopeEndIndex - pos > 1 && nodes.Count > 1);
         
         return new Result<BinaryTree<ExpressionToken>, Error?>(new BinaryTree<ExpressionToken>(nodes[0]), null);
     }
 
     private OpScope GetOperationScope(int pos, List<BinaryTreeNode<ExpressionToken>> nodes) {
-        if (Converter == null) return OpScope.None;
-        
         var scope = OpScope.None;
         if (pos > 0 && Converter.IsValue(nodes[pos - 1].Data)) scope = OpScope.Left;
         if (pos < nodes.Count - 1 && Converter.IsValue(nodes[pos + 1].Data)) {
@@ -113,12 +108,11 @@ public class TokenParser {
         return scope;
     }
     
-    private bool ResolveVariables(BinaryTreeNode<ExpressionToken> node) {
-        if (Converter == null) return false;
-        
+    private bool ResolveVariables(BinaryTreeNode<ExpressionToken> node, Operation op) {
         var data = node.Data;
-        if (data.Type != ExpressionTokenType.ArithmeticOperation) return true;
-
+        if (data.Type != ExpressionTokenType.Operation) return true;
+        if (Converter.IsReferenceOperation(op)) return true;
+        
         var left = node.Left;
         var right = node.Right;
         

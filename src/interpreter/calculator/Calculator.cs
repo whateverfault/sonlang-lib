@@ -38,10 +38,10 @@ public class Calculator {
 
             var left = current.Left?.Data;
             var right = current.Right?.Data;
-            if (data.Type == ExpressionTokenType.ArithmeticOperation
+            if (data.Type == ExpressionTokenType.Operation
              && left == null
              && right == null) {
-                var susOp = GetOperation(data.Value);
+                var susOp = GetOperation(data.Value.Val);
                 if (susOp is not { Scope: OpScope.None, }) return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
             }
             
@@ -49,7 +49,7 @@ public class Calculator {
             if (left != null) scope = OpScope.Left;
             if (right != null) scope = scope == OpScope.Left ? OpScope.LeftRight : OpScope.Right;
             
-            var op = GetOperation(current.Data.Value, scope);
+            var op = GetOperation(current.Data.Value.Val, scope);
             if (op == null) return new Result<ExpressionToken?, Error?>(null, Error.IllegalOperation);
             
             var result = op.Evaluation.Invoke(current.Left, current.Right);
@@ -58,7 +58,7 @@ public class Calculator {
 
             current.Left = null;
             current.Right = null;
-            current.Data.Value = result.Value.Root.Data.Value;
+            current.Data.Values = result.Value.Root.Data.Values;
             current.Data.Type = result.Value.Root.Data.Type;
         }
 

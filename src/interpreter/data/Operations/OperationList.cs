@@ -1,5 +1,4 @@
 ﻿using System.Globalization;
-using System.Text;
 using sonlanglib.interpreter.calculator;
 using sonlanglib.interpreter.conversion;
 using sonlanglib.interpreter.error;
@@ -25,9 +24,9 @@ public enum Priority {
 }
 
 public static class OperationList {
-    private static readonly StringBuilder _sb = new StringBuilder(); 
     private static Interpreter? _interpreter;
-
+    private static ValueOperations? _valOps;
+    
     private static Calculator? Calculator => _interpreter?.Calculator;
     private static TypeConverter? Converter => _interpreter?.TypeConverter;
     
@@ -146,11 +145,26 @@ public static class OperationList {
                                                                             OpScope.LeftRight,
                                                                             Priority.SpecialLow
                                                                            ),
+                                                              new Operation(
+                                                                            "&",
+                                                                            Ref,
+                                                                            OpScope.Right,
+                                                                            Priority.Highest
+                                                                           ),
+                                                              new Operation(
+                                                                            "*",
+                                                                            Deref,
+                                                                            OpScope.Right,
+                                                                            Priority.Highest
+                                                                           ),
                                                           ];
     
 
     public static void Initialize(Interpreter interpreter) {
         _interpreter = interpreter;
+
+        if (Converter == null) return;
+        _valOps = new ValueOperations(Converter);
     }
     
     public static Operation? GetOperation(string name, OpScope scope = OpScope.None) {
@@ -160,7 +174,6 @@ public static class OperationList {
         if (candidates.Count <= 0) return null;
         
         var result = candidates[0];
-        _sb.Clear();
         
         if (scope != OpScope.None && result.Scope != scope) {
             return candidates
@@ -185,42 +198,40 @@ public static class OperationList {
 
         right.Data = result.Value;
         var variable = 
-            _interpreter.GetVariable(left.Data.Value)
-         ?? _interpreter.SetVariable(left.Data.Value, right.Data.Value, Converter.TokenTypeToVarType(right.Data.Type));
+            _interpreter.GetVariable(left.Data.Value.Val)
+         ?? _interpreter.SetVariable(left.Data.Value.Val, right.Data.Values, right.Data.Type);
 
         if (variable == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
         
-        _interpreter.SetVariable(variable.Name, right.Data.Value, Converter.TokenTypeToVarType(right.Data.Type));
+        _interpreter.SetVariable(variable.Name, right.Data.Values, right.Data.Type);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
     }
     
     private static Result<BinaryTree<ExpressionToken>?, Error?> Addition(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
-        if (Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        if (Converter == null 
+         || _valOps == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        
         if (right == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         if (left == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
 
-        var result = Converter.ParseNumbers(left, right);
+        if (left.Data.Type == ExpressionTokenType.Array || right.Data.Type == ExpressionTokenType.Array) {
+            return _valOps.ValueToArrayOptionalLeft(left, right, _valOps.AddValues);
+        }
+        
+        var result = _valOps.AddValues(left.Data.Value, right.Data.Value);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
         if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
 
-        var lval = result.Value.Left ?? 0;
-        var rval = result.Value.Right;
-        if (Converter.IsLiteral(left.Data) || Converter.IsLiteral(right.Data)) {
-            _sb.Append($"{left.Data.Value}{right.Data.Value}");
-            var strToken = new ExpressionToken(ExpressionTokenType.String, _sb.ToString());
-            return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(strToken), null);
-        }
-        
-        if (rval == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
-        var numToken = new ExpressionToken(ExpressionTokenType.Number, (lval + (double)rval).ToString(CultureInfo.InvariantCulture));
-        return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(numToken), null);
+        var token = new ExpressionToken(result.Value);
+        return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
     private static Result<BinaryTree<ExpressionToken>?, Error?> Subtraction(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
         if (Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        
         if (right == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         if (left == null) {
-            right.Data.Value = $"-{right.Data.Value}";
+            right.Data.Value.Val = $"-{right.Data.Value.Val}";
             return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
         }
         
@@ -232,23 +243,25 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
-        var token = new ExpressionToken(ExpressionTokenType.Number, (lval - (double)rval).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken((lval - (double)rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Number);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
     private static Result<BinaryTree<ExpressionToken>?, Error?> Multiplication(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
-        if (Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        if (Converter == null 
+         || _valOps == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        
         if (right == null || left == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
-        var result = Converter.ParseNumbers(left, right);
+        if (left.Data.Type == ExpressionTokenType.Array || right.Data.Type == ExpressionTokenType.Array) {
+            return _valOps.ValueToArrayStrict(left, right, _valOps.MultiplyValues);
+        }
+        
+        var result = _valOps.MultiplyValues(left.Data.Value, right.Data.Value);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
         if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
-        
-        var lval = result.Value.Left;
-        var rval = result.Value.Right;
-        if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
-        
-        var token = new ExpressionToken(ExpressionTokenType.Number, ((double)lval * (double)rval).ToString(CultureInfo.InvariantCulture));
+
+        var token = new ExpressionToken(result.Value);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -264,7 +277,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null || rval == 0.0) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
-        var token = new ExpressionToken(ExpressionTokenType.Number, ((double)lval / (double)rval).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(((double)lval / (double)rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Number);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -281,8 +294,8 @@ public static class OperationList {
         if (lval is null || rval == 0) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
         var token = rval switch {
-                        null => new ExpressionToken(ExpressionTokenType.Number, ((double)lval / 100).ToString(CultureInfo.InvariantCulture)),
-                        _ => new ExpressionToken(ExpressionTokenType.Number, ((double)lval % (double)rval).ToString(CultureInfo.InvariantCulture)),
+                        null => new ExpressionToken(((double)lval / 100).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Number),
+                        _ => new ExpressionToken(((double)lval % (double)rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Number),
                     };
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
@@ -299,7 +312,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Number, (Math.Pow((double)lval, (double)rval)).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken((Math.Pow((double)lval, (double)rval)).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Number);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -315,7 +328,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(lval != 0 && rval != 0).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(lval != 0 && rval != 0).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -331,7 +344,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(lval != 0 || rval != 0).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(lval != 0 || rval != 0).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -346,7 +359,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(rval == 0).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(rval == 0).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -362,7 +375,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(lval.Equals(rval)).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(lval.Equals(rval)).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -378,7 +391,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(!lval.Equals(rval)).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(!lval.Equals(rval)).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -394,7 +407,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(lval > rval).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(lval > rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -410,7 +423,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(lval < rval).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(lval < rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -426,7 +439,7 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(lval >= rval).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(lval >= rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -442,7 +455,36 @@ public static class OperationList {
         var rval = result.Value.Right;
         if (rval is null || lval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
 
-        var token = new ExpressionToken(ExpressionTokenType.Bool, Converter.LogicalBoolToBool(lval <= rval).ToString(CultureInfo.InvariantCulture));
+        var token = new ExpressionToken(Converter.LogicalBoolToBool(lval <= rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Bool);
+        return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
+    }
+    
+    private static Result<BinaryTree<ExpressionToken>?, Error?> Ref(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
+        if (_interpreter == null || Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        if (right == null 
+         || !Converter.IsReferencable(right.Data)) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+
+        var variable = _interpreter.GetVariable(right.Data.Value.Val);
+        if (variable == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        
+        var token = new ExpressionToken(variable.Name, ExpressionTokenType.Reference);
+        return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
+    }
+    
+    private static Result<BinaryTree<ExpressionToken>?, Error?> Deref(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
+        if (_interpreter == null || Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        if (right == null || !Converter.IsReferencable(right.Data)) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        
+        var reference = _interpreter.GetVariable(right.Data.Value.Val);
+        if (reference == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        
+        var deref = _interpreter.GetVariable(reference.Value.Val);
+        if (deref == null) {
+            var derefToken = new ExpressionToken(Converter.VarValuesToValues(reference.Values), Converter.VarTypeToTokenType(reference.Type));
+            return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(derefToken), null);
+        }
+        
+        var token = new ExpressionToken(Converter.VarValuesToValues(deref.Values), Converter.VarTypeToTokenType(deref.Type));
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
 }

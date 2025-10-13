@@ -11,47 +11,53 @@ namespace sonlanglib.interpreter;
 
 public class Interpreter {
     private readonly InterpreterMetadata _metaData;
-    private readonly OperationExecutor _executor;
-    private readonly ExpressionLexer _lexer;
-    private readonly TokenParser _parser;
+    private readonly Tokenizer _lexer;
     
-    public Calculator? Calculator { get; private set; }
-    public TypeConverter? TypeConverter { get; private set; }
+    public Calculator Calculator { get; private set; }
+    public TypeConverter TypeConverter { get; private set; }
+    public TokenParser Parser { get; private set; }
+    public OperationExecutor Executor { get; private set; }
 
     public event EventHandler<Variable>? OnVariableChanged; 
 
 
     public Interpreter() {
-        OperationList.Initialize(this);
-        
         TypeConverter = new TypeConverter(this);
         Calculator = new Calculator(TypeConverter);
+        Parser = new TokenParser(this);
+        Executor = new OperationExecutor(TypeConverter);
         
         _metaData = new InterpreterMetadata();
-        _parser = new TokenParser(this);
-        _lexer = new ExpressionLexer(TypeConverter);
-        _executor = new OperationExecutor(TypeConverter);
+        _lexer = new Tokenizer(this);
+        
+        OperationList.Initialize(this);
     }
     
     public Result<ExpressionToken?, string?> Evaluate(string expression) {
-        if (string.IsNullOrEmpty(expression)) return new Result<ExpressionToken?, string?>(new ExpressionToken(ExpressionTokenType.String, string.Empty), null);
+        if (string.IsNullOrEmpty(expression)) return new Result<ExpressionToken?, string?>(new ExpressionToken(string.Empty, ExpressionTokenType.String), null);
+
+        expression = expression.Replace(" ", "");
         
-        var lexResult = _lexer.Lex(expression);
+        var lexResult = _lexer.Tokenize(expression);
         if (!lexResult.Ok) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(lexResult.Error));
         if (lexResult.Value == null) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
         
-        var parseResult = _parser.Parse(lexResult.Value);
+        var parseResult = Parser.Parse(lexResult.Value);
         if (!parseResult.Ok) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(parseResult.Error));
         if (parseResult.Value == null) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
         
-        var executionResult =  _executor.Execute(parseResult.Value);
+        var executionResult =  Executor.Execute(parseResult.Value);
         if (!executionResult.Ok) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(executionResult.Error));
         if (executionResult.Value == null) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
-
+        
+        if (TypeConverter.ArrayToString(executionResult.Value, out var value)) {
+            executionResult.Value.Value.Val = value;
+        }
+        
         return new Result<ExpressionToken?, string?>(executionResult.Value, null);
     }
     
-    public Variable? SetVariable(string name, List<string> vals, VariableType type) {
+    public Variable? SetVariable(string name, List<VarValue> vals, VariableType type) {
         if (string.IsNullOrEmpty(name)) return null;
         
         var result = _metaData.SetVariable(name, type, vals);
@@ -60,8 +66,13 @@ public class Interpreter {
         return result;
     }
 
+    public Variable? SetVariable(string name, List<Value> vals, ExpressionTokenType type) {
+        if (string.IsNullOrEmpty(name)) return null;
+        return SetVariable(name, TypeConverter.ValuesToVarValues(vals), TypeConverter.TokenTypeToVarType(type));
+    }
+    
     public Variable? SetVariable(string name, string val, VariableType type) {
-        return SetVariable(name, [val,], type);
+        return SetVariable(name, [new VarValue(val, type),], type);
     }
     
     public Variable? GetVariable(string name) {
