@@ -1,9 +1,10 @@
 ﻿using sonlanglib.interpreter.error;
 using sonlanglib.interpreter.lexer;
+using sonlanglib.interpreter.tokenizer;
 using sonlanglib.shared;
 using sonlanglib.shared.trees;
 
-namespace sonlanglib.interpreter.data;
+namespace sonlanglib.interpreter.data.ops;
 
 public delegate Result<BinaryTree<ExpressionToken>?, Error?> EvaluationHandler(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right);
 

@@ -1,4 +1,6 @@
-﻿namespace sonlanglib.interpreter.data;
+﻿using sonlanglib.interpreter.data.vars;
+
+namespace sonlanglib.interpreter.data;
 
 public class InterpreterMetadata {
     private Dictionary<string, Variable> _variables;
@@ -8,8 +10,8 @@ public class InterpreterMetadata {
         _variables = new Dictionary<string, Variable>();
     }
     
-    public Variable SetVariable(string name, VariableType type, List<VarValue> vals) {
-        var var = new Variable(name, type, vals);
+    public Variable SetVariable(string name, VarValue val) {
+        var var = new Variable(name, val);
         if (!_variables.TryAdd(name, var)) {
             _variables[name] = var;
         }

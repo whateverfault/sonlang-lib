@@ -1,10 +1,10 @@
-﻿using sonlanglib.interpreter.lexer;
+﻿using sonlanglib.interpreter.tokenizer;
 
-namespace sonlanglib.interpreter.data;
+namespace sonlanglib.interpreter.data.vars;
 
 public class Value {
     public string Val;
-    public ExpressionTokenType Type;
+    public readonly ExpressionTokenType Type;
 
 
     public Value(string val, ExpressionTokenType type) {

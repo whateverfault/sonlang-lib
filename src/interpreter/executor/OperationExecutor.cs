@@ -1,7 +1,9 @@
 ﻿using sonlanglib.interpreter.conversion;
 using sonlanglib.interpreter.data;
+using sonlanglib.interpreter.data.ops;
 using sonlanglib.interpreter.error;
 using sonlanglib.interpreter.lexer;
+using sonlanglib.interpreter.tokenizer;
 using sonlanglib.shared;
 using sonlanglib.shared.trees;
 
@@ -40,16 +42,16 @@ public class OperationExecutor {
             var right = current.Right?.Data;
             
             var operation = OperationList.GetOperation(data.Value.Val); 
-            if (data.Type == ExpressionTokenType.SpecialOperation
+            if (data.Type == ExpressionTokenType.Assigment
              && left == null
              && right == null) {
                 if (operation is not { Scope: OpScope.None, }) return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
             }
 
-            if (current.Left != null && left?.Type is ExpressionTokenType.SpecialOperation) {
+            if (current.Left != null && left?.Type is ExpressionTokenType.Assigment) {
                 current = current.Left;
                 continue;
-            } if (current.Right != null && right?.Type is ExpressionTokenType.SpecialOperation) {
+            } if (current.Right != null && right?.Type is ExpressionTokenType.Assigment) {
                 current = current.Right;
                 continue;
             }

@@ -1,17 +1,21 @@
 ﻿using sonlanglib.interpreter.calculator;
 using sonlanglib.interpreter.conversion;
 using sonlanglib.interpreter.data;
+using sonlanglib.interpreter.data.ops;
+using sonlanglib.interpreter.data.vars;
 using sonlanglib.interpreter.error;
 using sonlanglib.interpreter.executor;
 using sonlanglib.interpreter.lexer;
 using sonlanglib.interpreter.parser;
+using sonlanglib.interpreter.tokenizer;
 using sonlanglib.shared;
 
 namespace sonlanglib.interpreter;
 
 public class Interpreter {
+    private readonly ExpressionTokenizer _tokenizer;
     private readonly InterpreterMetadata _metaData;
-    private readonly Tokenizer _lexer;
+    private readonly ExpressionLexer _lexer;
     
     public Calculator Calculator { get; private set; }
     public TypeConverter TypeConverter { get; private set; }
@@ -27,52 +31,48 @@ public class Interpreter {
         Parser = new TokenParser(this);
         Executor = new OperationExecutor(TypeConverter);
         
+        _tokenizer = new ExpressionTokenizer(this);
+        _lexer = new ExpressionLexer(this);
         _metaData = new InterpreterMetadata();
-        _lexer = new Tokenizer(this);
         
         OperationList.Initialize(this);
     }
     
-    public Result<ExpressionToken?, string?> Evaluate(string expression) {
-        if (string.IsNullOrEmpty(expression)) return new Result<ExpressionToken?, string?>(new ExpressionToken(string.Empty, ExpressionTokenType.String), null);
-
-        expression = expression.Replace(" ", "");
+    public Result<string?, string?> Evaluate(string expression) {
+        if (string.IsNullOrEmpty(expression)) return new Result<string?, string?>(string.Empty, null);
         
-        var lexResult = _lexer.Tokenize(expression);
-        if (!lexResult.Ok) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(lexResult.Error));
-        if (lexResult.Value == null) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
+        var tokenizeResult = _tokenizer.Tokenize(expression);
+        if (!tokenizeResult.Ok) return new Result<string?, string?>(null, Errors.GetErrorString(tokenizeResult.Error));
+        if (tokenizeResult.Value == null) return new Result<string?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
+        
+        var lexResult = _lexer.Lex(tokenizeResult.Value);
+        if (!lexResult.Ok) return new Result<string?, string?>(null, Errors.GetErrorString(lexResult.Error));
+        if (lexResult.Value == null) return new Result<string?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
         
         var parseResult = Parser.Parse(lexResult.Value);
-        if (!parseResult.Ok) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(parseResult.Error));
-        if (parseResult.Value == null) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
+        if (!parseResult.Ok) return new Result<string?, string?>(null, Errors.GetErrorString(parseResult.Error));
+        if (parseResult.Value == null) return new Result<string?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
         
         var executionResult =  Executor.Execute(parseResult.Value);
-        if (!executionResult.Ok) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(executionResult.Error));
-        if (executionResult.Value == null) return new Result<ExpressionToken?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
-        
-        if (TypeConverter.ArrayToString(executionResult.Value, out var value)) {
-            executionResult.Value.Value.Val = value;
-        }
-        
-        return new Result<ExpressionToken?, string?>(executionResult.Value, null);
+        if (!executionResult.Ok) return new Result<string?, string?>(null, Errors.GetErrorString(executionResult.Error));
+        if (executionResult.Value == null) return new Result<string?, string?>(null, Errors.GetErrorString(Error.SmthWentWrong));
+
+        executionResult.Value.Value.Val = TypeConverter.ToString(executionResult.Value);
+        return new Result<string?, string?>(executionResult.Value.Value.Val, null);
     }
     
-    public Variable? SetVariable(string name, List<VarValue> vals, VariableType type) {
+    private Variable? SetVariable(string name, VarValue val) {
         if (string.IsNullOrEmpty(name)) return null;
         
-        var result = _metaData.SetVariable(name, type, vals);
+        var result = _metaData.SetVariable(name, val);
         OnVariableChanged?.Invoke(this, result);
 
         return result;
     }
 
-    public Variable? SetVariable(string name, List<Value> vals, ExpressionTokenType type) {
+    public Variable? SetVariable(string name, ExpressionToken token) {
         if (string.IsNullOrEmpty(name)) return null;
-        return SetVariable(name, TypeConverter.ValuesToVarValues(vals), TypeConverter.TokenTypeToVarType(type));
-    }
-    
-    public Variable? SetVariable(string name, string val, VariableType type) {
-        return SetVariable(name, [new VarValue(val, type),], type);
+        return SetVariable(name, TypeConverter.TokenToVarValue(token));
     }
     
     public Variable? GetVariable(string name) {

@@ -52,8 +52,8 @@ internal static class Errors {
                                                      ];
     
     
-    public static string? GetErrorString(Error? error, Language lang = Language.English) {
-        if (error == null) return null;
+    public static string GetErrorString(Error? error, Language lang = Language.English) {
+        if (error == null) return string.Empty;
         
         var localization = _errors[(int)error];
         return localization.GetString(lang);

@@ -1,7 +1,7 @@
 ﻿using sonlanglib.interpreter.conversion;
-using sonlanglib.interpreter.data;
+using sonlanglib.interpreter.data.ops;
 using sonlanglib.interpreter.error;
-using sonlanglib.interpreter.lexer;
+using sonlanglib.interpreter.tokenizer;
 using sonlanglib.shared;
 using sonlanglib.shared.trees;
 
@@ -58,8 +58,7 @@ public class Calculator {
 
             current.Left = null;
             current.Right = null;
-            current.Data.Values = result.Value.Root.Data.Values;
-            current.Data.Type = result.Value.Root.Data.Type;
+            current.Data = result.Value.Root.Data;
         }
 
         if (current.Data.Type == ExpressionTokenType.Name) {

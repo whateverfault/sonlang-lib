@@ -13,7 +13,7 @@ public class Localization {
         _localizations = localizations;
     }
 
-    public string? GetString(Language language) {
-        return _localizations.GetValueOrDefault(language);
+    public string GetString(Language language) {
+        return _localizations.GetValueOrDefault(language) ?? string.Empty;
     }
 }

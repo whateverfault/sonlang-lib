@@ -1,38 +1,33 @@
 ﻿using System.Text;
 using sonlanglib.interpreter.conversion;
 using sonlanglib.interpreter.error;
-using sonlanglib.interpreter.executor;
-using sonlanglib.interpreter.parser;
 using sonlanglib.shared;
-using sonlanglib.shared.trees;
 
-namespace sonlanglib.interpreter.lexer;
+namespace sonlanglib.interpreter.tokenizer;
 
-public class Tokenizer {
+public class ExpressionTokenizer {
     private readonly Interpreter _interpreter;
     
     private TypeConverter Converter => _interpreter.TypeConverter;
-    private TokenParser Parser => _interpreter.Parser;
-    private OperationExecutor Executor => _interpreter.Executor;
     
     
-    public Tokenizer(Interpreter interpreter) {
+    public ExpressionTokenizer(Interpreter interpreter) {
         _interpreter = interpreter;
     }
     
-    public Result<List<BinaryTreeNode<ExpressionToken>>?, Error?> Tokenize(string expression) {
-        var tokens = new List<BinaryTreeNode<ExpressionToken>>();
+    public Result<List<ExpressionToken>?, Error?> Tokenize(string expression) {
+        var tokens = new List<ExpressionToken>();
         
         for (var pos = 0; pos < expression.Length;) {
             var result = ParseToken(expression, out var end, pos);
-            if (!result.Ok) return new Result<List<BinaryTreeNode<ExpressionToken>>?, Error?>(null, result.Error);
-            if (result.Value == null) return new Result<List<BinaryTreeNode<ExpressionToken>>?, Error?>(null, Error.SmthWentWrong);
+            if (!result.Ok) return new Result<List<ExpressionToken>?, Error?>(null, result.Error);
+            if (result.Value == null) return new Result<List<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
             
             pos = end;
-            tokens.AddRange(result.Value.Select(token => new BinaryTreeNode<ExpressionToken>(token)));
+            tokens.AddRange(result.Value);
         }
         
-        return new Result<List<BinaryTreeNode<ExpressionToken>>?, Error?>(tokens, null);
+        return new Result<List<ExpressionToken>?, Error?>(tokens, null);
     }
 
     private Result<List<ExpressionToken>?, Error?> ParseToken(string expression, out int end, int pos) {
@@ -53,19 +48,11 @@ public class Tokenizer {
             AddToken(tokens, sb);
             end = pos;
         } else {
-            if (expression[pos] == '[') {
-                var parseArrayResult = ParseArray(expression, out end, pos);
-                if (!parseArrayResult.Ok) return new Result<List<ExpressionToken>?, Error?>(null, parseArrayResult.Error);
-                if (parseArrayResult.Value == null) return new Result<List<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
-                
-                tokens.Add(parseArrayResult.Value);
-            } else {
-                var parseTokenResult = ParseNonNumberToken(expression, out end, pos);
-                if (!parseTokenResult.Ok) return new Result<List<ExpressionToken>?, Error?>(null, parseTokenResult.Error);
-                if (parseTokenResult.Value == null) return new Result<List<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
+            var parseTokenResult = ParseNonNumberToken(expression, out end, pos);
+            if (!parseTokenResult.Ok) return new Result<List<ExpressionToken>?, Error?>(null, parseTokenResult.Error);
+            if (parseTokenResult.Value == null) return new Result<List<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
 
-                tokens.AddRange(parseTokenResult.Value);
-            }
+            tokens.AddRange(parseTokenResult.Value);
         }
         
         return new Result<List<ExpressionToken>?, Error?>(tokens, null);
@@ -106,7 +93,7 @@ public class Tokenizer {
                     pos = end;
                     AddToken(tokens, result.Value, isString: true); break;
                 }
-                case ';' or '(' or ')' or ',':
+                case ';' or '(' or ')' or ',' or '[' or ']':
                     AddToken(tokens, sb);
                     sb.Append(expression[pos]);
                     AddToken(tokens, sb); break;
@@ -148,66 +135,7 @@ public class Tokenizer {
         
         return new Result<StringBuilder?, Error?>(null, Error.InvalidSyntax);
     }
-
-    private Result<ExpressionToken?, Error?> ParseArray(string expression, out int end, int pos) {
-        var tokens = new List<ExpressionToken>();
-        end = pos;
-        
-        var array = false;
-        for (; pos < expression.Length; ++pos) {
-            var c = expression[pos];
-            end = pos;
-
-            switch (c) {
-                case '[': {
-                    array = true;
-                    ++pos;
-                    break;
-                }
-                case ']': {
-                    array = false;
-                    break;
-                }
-            }
-
-            if (!array) break;
-
-            var quit = false;
-            var tempTokens = new List<ExpressionToken>();
-            
-            do {
-                var result = ParseToken(expression, out end, pos);
-                if (!result.Ok) return new Result<ExpressionToken?, Error?>(null, result.Error);
-                if (result.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
-
-                pos = end;
-                if (expression[pos] == ']') {
-                    array = false;
-                    quit = true;
-                }
-                if (result.Value.Any(x => x.Value.Type == ExpressionTokenType.Comma)) quit = true;
-                tempTokens.AddRange(result.Value.Where(x => x.Value.Type != ExpressionTokenType.Comma));
-            } while (!quit);
-
-            pos = end - 1;
-            var parseResult = Parser.Parse(tempTokens.Select(x => new BinaryTreeNode<ExpressionToken>(x)).ToList());
-            if (!parseResult.Ok) return new Result<ExpressionToken?, Error?>(null, parseResult.Error);
-            if (parseResult.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
-            
-            var executionResult = Executor.Execute(parseResult.Value);
-            if (!executionResult.Ok) return new Result<ExpressionToken?, Error?>(null, executionResult.Error);
-            if (executionResult.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
-
-            tokens.Add(executionResult.Value);
-        }
-        
-        if (array) return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
-
-        ++end;
-        var token = new ExpressionToken(tokens);
-        return new Result<ExpressionToken?, Error?>(token, null);
-    }
-
+    
     private StringBuilder? ParseOperation(string expression, out int end, int pos) {
         var sb = new StringBuilder();
         end = pos;

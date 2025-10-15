@@ -1,8 +1,8 @@
 ﻿using sonlanglib.interpreter.calculator;
 using sonlanglib.interpreter.conversion;
-using sonlanglib.interpreter.data;
+using sonlanglib.interpreter.data.ops;
 using sonlanglib.interpreter.error;
-using sonlanglib.interpreter.lexer;
+using sonlanglib.interpreter.tokenizer;
 using sonlanglib.shared;
 using sonlanglib.shared.trees;
 
@@ -24,12 +24,12 @@ public class TokenParser {
             var node = nodes[i];
             var data = node.Data;
 
-            if (data.Type != ExpressionTokenType.OpeningParenthesis) continue;
+            if (data.Type != ExpressionTokenType.LeftParenthesis) continue;
             nodes.RemoveAt(i);
             Parse(nodes, i); break;
         }
 
-        if (nodes.Count <= 0) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.SmthWentWrong);
+        if (nodes.Count <= 0) return new Result<BinaryTree<ExpressionToken>, Error?>(null, null);
         if (nodes.Count == 1 && !Converter.IsOperation(nodes[0].Data)) {
             var node = nodes[0];
             if (node.Data.Type == ExpressionTokenType.Name) {
@@ -50,7 +50,7 @@ public class TokenParser {
                 var node = nodes[i];
                 var data = node.Data;
 
-                if (data.Type == ExpressionTokenType.ClosingParenthesis) {
+                if (data.Type == ExpressionTokenType.RightParenthesis) {
                     nodes.RemoveAt(i);
                     scopeEndIndex = i; break;
                 }
@@ -77,7 +77,7 @@ public class TokenParser {
                 nodes[maxIndex - 1].Parent = nodes[maxIndex];
                 nodes.RemoveAt(--maxIndex); --scopeEndIndex;
             } if (maxIndex < nodes.Count - 1 && maxOp.Scope is OpScope.Right or OpScope.LeftRight) {
-                if (nodes[maxIndex + 1].Data.Type == ExpressionTokenType.ClosingParenthesis) {
+                if (nodes[maxIndex + 1].Data.Type == ExpressionTokenType.RightParenthesis) {
                     return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.InvalidSyntax);
                 }
                 nodes[maxIndex].Right = nodes[maxIndex + 1];
@@ -92,7 +92,7 @@ public class TokenParser {
             if (result.Value == null) return new Result<BinaryTree<ExpressionToken>, Error?>(null, Error.SmthWentWrong);
             
             nodes[maxIndex].Data.Type = result.Value.Type;
-            nodes[maxIndex].Data.Values = result.Value.Values;
+            nodes[maxIndex].Data = result.Value;
         } while (scopeEndIndex - pos > 1 && nodes.Count > 1);
         
         return new Result<BinaryTree<ExpressionToken>, Error?>(new BinaryTree<ExpressionToken>(nodes[0]), null);

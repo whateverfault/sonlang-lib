@@ -2,11 +2,11 @@
 using sonlanglib.interpreter.calculator;
 using sonlanglib.interpreter.conversion;
 using sonlanglib.interpreter.error;
-using sonlanglib.interpreter.lexer;
+using sonlanglib.interpreter.tokenizer;
 using sonlanglib.shared;
 using sonlanglib.shared.trees;
 
-namespace sonlanglib.interpreter.data;
+namespace sonlanglib.interpreter.data.ops;
 
 public enum OpScope {
     None = 0,
@@ -83,7 +83,7 @@ public static class OperationList {
                                                                             "^",
                                                                             Exponentiation,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Highest
                                                                            ),
                                                               new Operation(
                                                                             "&",
@@ -199,11 +199,11 @@ public static class OperationList {
         right.Data = result.Value;
         var variable = 
             _interpreter.GetVariable(left.Data.Value.Val)
-         ?? _interpreter.SetVariable(left.Data.Value.Val, right.Data.Values, right.Data.Type);
+         ?? _interpreter.SetVariable(left.Data.Value.Val, right.Data);
 
         if (variable == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
         
-        _interpreter.SetVariable(variable.Name, right.Data.Values, right.Data.Type);
+        _interpreter.SetVariable(variable.Name, right.Data);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
     }
     
@@ -215,10 +215,10 @@ public static class OperationList {
         if (left == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
 
         if (left.Data.Type == ExpressionTokenType.Array || right.Data.Type == ExpressionTokenType.Array) {
-            return _valOps.ValueToArrayOptionalLeft(left, right, _valOps.AddValues);
+            return _valOps.ApplyOperationOnArrayLeft(left, right, _valOps.Add);
         }
         
-        var result = _valOps.AddValues(left.Data.Value, right.Data.Value);
+        var result = _valOps.Add(left.Data.Value, right.Data.Value);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
         if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
 
@@ -227,23 +227,21 @@ public static class OperationList {
     }
     
     private static Result<BinaryTree<ExpressionToken>?, Error?> Subtraction(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
-        if (Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        if (Converter == null 
+         || _valOps == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
         
         if (right == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
-        if (left == null) {
-            right.Data.Value.Val = $"-{right.Data.Value.Val}";
-            return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
+        left ??= new BinaryTreeNode<ExpressionToken>(new ExpressionToken("0", ExpressionTokenType.Number));
+
+        if (left.Data.Type == ExpressionTokenType.Array || right.Data.Type == ExpressionTokenType.Array) {
+            return _valOps.ApplyOperationOnArrayLeft(left, right, _valOps.Subtract);
         }
         
-        var result = Converter.ParseNumbers(left, right);
+        var result = _valOps.Subtract(left.Data.Value, right.Data.Value);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
         if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
-        
-        var lval = result.Value.Left ?? 0;
-        var rval = result.Value.Right;
-        if (rval is null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
-        
-        var token = new ExpressionToken((lval - (double)rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Number);
+
+        var token = new ExpressionToken(result.Value);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -254,10 +252,10 @@ public static class OperationList {
         if (right == null || left == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
         if (left.Data.Type == ExpressionTokenType.Array || right.Data.Type == ExpressionTokenType.Array) {
-            return _valOps.ValueToArrayStrict(left, right, _valOps.MultiplyValues);
+            return _valOps.ApplyOperationOnArrayStrict(left, right, _valOps.Multiply);
         }
         
-        var result = _valOps.MultiplyValues(left.Data.Value, right.Data.Value);
+        var result = _valOps.Multiply(left.Data.Value, right.Data.Value);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
         if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
 
@@ -266,18 +264,20 @@ public static class OperationList {
     }
     
     private static Result<BinaryTree<ExpressionToken>?, Error?> Division(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
-        if (Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        if (Converter == null 
+         || _valOps == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        
         if (right == null || left == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
-        var result = Converter.ParseNumbers(left, right);
+        if (left.Data.Type == ExpressionTokenType.Array || right.Data.Type == ExpressionTokenType.Array) {
+            return _valOps.ApplyOperationOnArrayStrict(left, right, _valOps.Divide);
+        }
+        
+        var result = _valOps.Divide(left.Data.Value, right.Data.Value);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
         if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
-        
-        var lval = result.Value.Left;
-        var rval = result.Value.Right;
-        if (rval is null || lval is null || rval == 0.0) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
-        
-        var token = new ExpressionToken(((double)lval / (double)rval).ToString(CultureInfo.InvariantCulture), ExpressionTokenType.Number);
+
+        var token = new ExpressionToken(result.Value);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
     
@@ -478,13 +478,13 @@ public static class OperationList {
         var reference = _interpreter.GetVariable(right.Data.Value.Val);
         if (reference == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         
-        var deref = _interpreter.GetVariable(reference.Value.Val);
+        var deref = _interpreter.GetVariable(reference.Value.Value.Val);
         if (deref == null) {
-            var derefToken = new ExpressionToken(Converter.VarValuesToValues(reference.Values), Converter.VarTypeToTokenType(reference.Type));
+            var derefToken = Converter.VarValueToToken(reference.Value);
             return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(derefToken), null);
         }
         
-        var token = new ExpressionToken(Converter.VarValuesToValues(deref.Values), Converter.VarTypeToTokenType(deref.Type));
+        var token = Converter.VarValueToToken(deref.Value);
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(token), null);
     }
 }
