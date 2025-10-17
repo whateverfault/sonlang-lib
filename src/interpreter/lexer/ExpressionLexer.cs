@@ -41,30 +41,40 @@ public class ExpressionLexer {
             var result = ParseToken(ref context);
             if (!result.Ok) return new Result<List<BinaryTreeNode<ExpressionToken>>?, Error?>(null, result.Error);
             if (result.Value == null) return new Result<List<BinaryTreeNode<ExpressionToken>>?, Error?>(null, Error.SmthWentWrong);
-            
-            nodes.AddRange(result.Value.Select(token => new BinaryTreeNode<ExpressionToken>(token)));
+
+            Process(nodes, result.Value);
+            nodes.Add(new BinaryTreeNode<ExpressionToken>(result.Value));
         }
         
         return new Result<List<BinaryTreeNode<ExpressionToken>>?, Error?>(nodes, null);
     }
 
-    private Result<List<ExpressionToken>?, Error?> ParseToken(ref LexerContext context) {
-        var tokens = new List<ExpressionToken>();
+    private Result<ExpressionToken?, Error?> ParseToken(ref LexerContext context) {
         var token = context.Tokens[context.Pos];
-        
-        if (token.Type == ExpressionTokenType.LeftBracket) {
-            var parseArrayResult = ParseArray(ref context);
-            if (!parseArrayResult.Ok) return new Result<List<ExpressionToken>?, Error?>(null, parseArrayResult.Error);
-            if (parseArrayResult.Value == null) return new Result<List<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
-            
-            tokens.Add(parseArrayResult.Value);
-        } else {
-            if (token.Type != ExpressionTokenType.RightBracket) {
-                tokens.Add(context.Tokens[context.Pos++]);
+
+        switch (token.Type) {
+            case ExpressionTokenType.LeftBracket: {
+                if (context.Pos > 0) {
+                    var prevToken = context.Tokens[context.Pos - 1];
+                    if (_interpreter.TypeConverter.IsIndexable(prevToken)) {
+                        var parseIndexResult = ParseIndex(ref context);
+                        if (!parseIndexResult.Ok) return new Result<ExpressionToken?, Error?>(null, parseIndexResult.Error);
+                        if (parseIndexResult.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
+
+                        return new Result<ExpressionToken?, Error?>(parseIndexResult.Value, null);
+                    }
+                }
+                
+                var parseArrayResult = ParseArray(ref context);
+                if (!parseArrayResult.Ok) return new Result<ExpressionToken?, Error?>(null, parseArrayResult.Error);
+                if (parseArrayResult.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
+
+                return new Result<ExpressionToken?, Error?>(parseArrayResult.Value, null);
+            }
+            default: {
+                return new Result<ExpressionToken?, Error?>(context.Tokens[context.Pos++], null);
             }
         }
-        
-        return new Result<List<ExpressionToken>?, Error?>(tokens, null);
     }
 
     private Result<ExpressionToken?, Error?> ParseArray(ref LexerContext context) {
@@ -93,28 +103,28 @@ public class ExpressionLexer {
                 return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
             }
             
-            var quit = false;
             var tempTokens = new List<ExpressionToken>();
-            
+
             do {
                 var result = ParseToken(ref context);
                 if (!result.Ok) return new Result<ExpressionToken?, Error?>(null, result.Error);
                 if (result.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
+
+                if (result.Value.Type is ExpressionTokenType.RightBracket) {
+                    context.IsArray = false;
+                    break;
+                } if (result.Value.Type is ExpressionTokenType.Comma) break;
+                
                 if (context.Pos >= context.Tokens.Count) {
                     return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
                 }
-                
-                if (context.Tokens[context.Pos].Type == ExpressionTokenType.RightBracket) {
-                    context.IsArray = false;
-                    quit = true;
-                } if (result.Value.Any(x => x.Type == ExpressionTokenType.Comma)) {
-                    quit = true;
-                }
-                
-                tempTokens.AddRange(result.Value.Where(x => x.Type != ExpressionTokenType.Comma));
-            } while (!quit && context.Pos < context.Tokens.Count);
+
+                tempTokens.Add(result.Value);
+            } while (context.Pos < context.Tokens.Count);
             
-            var parseResult = Parser.Parse(tempTokens.Select(x => new BinaryTreeNode<ExpressionToken>(x)).ToList());
+            var parseResult = Parser.Parse(tempTokens
+                                          .Select(x => new BinaryTreeNode<ExpressionToken>(x))
+                                          .ToList());
             if (!parseResult.Ok) return new Result<ExpressionToken?, Error?>(null, parseResult.Error);
             if (parseResult.Value == null) continue;
             
@@ -126,12 +136,52 @@ public class ExpressionLexer {
         }
         
         if (context.IsArray) return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
-
-        ++context.Pos;
+        
         var token = new ExpressionToken(tokens);
         return new Result<ExpressionToken?, Error?>(token, null);
     }
 
+    private Result<ExpressionToken?, Error?> ParseIndex(ref LexerContext context) {
+        var tokens = new List<ExpressionToken>();
+        if (context.Tokens[context.Pos].Type is ExpressionTokenType.LeftBracket) ++context.Pos;
+        
+        do {
+            var result = ParseToken(ref context);
+            if (!result.Ok) return new Result<ExpressionToken?, Error?>(null, result.Error);
+            if (result.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
+            
+            if (result.Value.Type is ExpressionTokenType.RightBracket) break;
+            if (context.Pos >= context.Tokens.Count) {
+                return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
+            }
+            
+            if (result.Value.Type is ExpressionTokenType.RightBracket) break;
+            
+            tokens.Add(result.Value);
+        } while (context.Pos < context.Tokens.Count);
+
+        var parseResult = Parser.Parse(tokens
+                                      .Select(x => new BinaryTreeNode<ExpressionToken>(x))
+                                      .ToList());
+        if (!parseResult.Ok) return new Result<ExpressionToken?, Error?>(null, parseResult.Error);
+        if (parseResult.Value == null) return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
+
+        var token = parseResult.Value.Root.Data;
+        token.Type = ExpressionTokenType.Index;
+        
+        return new Result<ExpressionToken?, Error?>(token, null);
+    }
+
+    private void Process(List<BinaryTreeNode<ExpressionToken>> nodes, ExpressionToken token) {
+        switch (token.Type) {
+            case ExpressionTokenType.Index: {
+                var pasted = new ExpressionToken("[]", ExpressionTokenType.Operation);
+                token.Type = ExpressionTokenType.Number;
+                nodes.Add(new BinaryTreeNode<ExpressionToken>(pasted)); break;
+            }
+        }
+    }
+    
     private bool CheckPairs(List<ExpressionToken> tokens) {
         var parentheses = tokens.FindAll(x => x.Type == ExpressionTokenType.LeftParenthesis).Count 
                         + tokens.FindAll(x => x.Type == ExpressionTokenType.RightParenthesis).Count;

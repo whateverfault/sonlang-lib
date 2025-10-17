@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using sonlanglib.interpreter.calculator;
 using sonlanglib.interpreter.conversion;
+using sonlanglib.interpreter.data.vars;
 using sonlanglib.interpreter.error;
 using sonlanglib.interpreter.tokenizer;
 using sonlanglib.shared;
@@ -21,6 +22,7 @@ public enum Priority {
     Low,
     High,
     Highest,
+    SpecialHigh,
 }
 
 public static class OperationList {
@@ -146,6 +148,12 @@ public static class OperationList {
                                                                             Priority.SpecialLow
                                                                            ),
                                                               new Operation(
+                                                                            "[]",
+                                                                            Indexing,
+                                                                            OpScope.LeftRight,
+                                                                            Priority.SpecialHigh
+                                                                           ),
+                                                              new Operation(
                                                                             "&",
                                                                             Ref,
                                                                             OpScope.Right,
@@ -184,6 +192,47 @@ public static class OperationList {
         return result;
     }
 
+    private static Result<BinaryTree<ExpressionToken>?, Error?> Indexing(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
+        if (Converter == null
+         || _interpreter == null
+         || Calculator == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
+        if (left == null || right == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InvalidSyntax);
+        
+        if (left.Data.Type != ExpressionTokenType.Name) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        
+        var result = Calculator.Calculate(new BinaryTree<ExpressionToken>(right));
+        if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
+        if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
+
+        right.Data = result.Value;
+        if (right.Data.Type != ExpressionTokenType.Number) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        
+        var variable = _interpreter.GetVariable(left.Data.Value.Val);
+        if (variable == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.UnknownIdentifier);
+
+        if (!Converter.ToNumber(right.Data.Value, out var indexDouble)) {
+            return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        }
+
+        indexDouble = double.Round(indexDouble);
+        var index = (int)indexDouble;
+        var value = variable.Value;
+        
+        switch (variable.Type) {
+            case VariableType.Array: {
+                if (index < 0 || index >= value.Next.Count) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.OutOfBound);
+                value = value.Next[index];
+                right.Data = Converter.VarValueToToken(value);
+                break;
+            } case VariableType.String: {
+                var c = value.Value.Val[index];
+                right.Data = new ExpressionToken(c.ToString(), ExpressionTokenType.String);
+                break;
+            } default: return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        }
+        return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
+    }
+    
     private static Result<BinaryTree<ExpressionToken>?, Error?> Assigment(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
         if (Converter == null
          || _interpreter == null

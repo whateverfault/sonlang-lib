@@ -9,6 +9,7 @@ public enum Error {
     UnknownIdentifier,
     IllegalOperation,
     InvalidSyntax,
+    OutOfBound,
 }
 
 internal static class Errors {
@@ -48,6 +49,12 @@ internal static class Errors {
                                                                                   { Language.English, "Invalid Syntax."},
                                                                                   { Language.Russian, "Неверный синтаксис."},
                                                                               }
+                                                                         ),
+                                                         new Localization(
+                                                                          new Dictionary<Language, string> {
+                                                                              { Language.English, "Out of Bounds."},
+                                                                              { Language.Russian, "За границами."},
+                                                                          }
                                                                          ),
                                                      ];
     

@@ -245,11 +245,17 @@ public class TypeConverter {
         return val.Type is ExpressionTokenType.Name or ExpressionTokenType.Reference;
     }
 
+    public bool IsIndexable(ExpressionToken token) {
+        return token.Type is ExpressionTokenType.Name or ExpressionTokenType.Array or ExpressionTokenType.String;
+    }
+    
     public bool IsReferenceOperation(Operation op) {
         var name = op.Name;
         var scope = op.Scope;
-        if (scope != OpScope.Right) return false;
 
+        if (name.Equals("[]")) return true;
+        if (scope != OpScope.Right) return false;
+        
         return name.Equals("&") || name.Equals("*");
     }
     

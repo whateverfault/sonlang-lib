@@ -9,6 +9,7 @@ public enum ExpressionTokenType {
     String,
     Array,
     Reference,
+    Index,
     Assigment,
     Operation,
     RightParenthesis,
