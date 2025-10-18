@@ -45,6 +45,14 @@ public class Calculator {
                 if (susOp is not { Scope: OpScope.None, }) return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
             }
             
+            if (current.Left != null && left?.Type is ExpressionTokenType.Operation) {
+                current = current.Left;
+                continue;
+            } if (current.Right != null && right?.Type is ExpressionTokenType.Operation) {
+                current = current.Right;
+                continue;
+            }
+            
             var scope = OpScope.None;
             if (left != null) scope = OpScope.Left;
             if (right != null) scope = scope == OpScope.Left ? OpScope.LeftRight : OpScope.Right;

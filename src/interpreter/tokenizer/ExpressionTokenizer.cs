@@ -177,7 +177,7 @@ public class ExpressionTokenizer {
     
     private bool IsSpecial(char c) {
         return c switch {
-                   ',' or ';' or '[' or ']' => true,
+                   ',' or ';' or ':' or '[' or ']' => true,
                    _                        => false,
                };
     }

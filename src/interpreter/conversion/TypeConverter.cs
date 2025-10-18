@@ -82,16 +82,9 @@ public class TypeConverter {
 
         if (!double.TryParse(value, out var valueD)) return false;
         
-        switch (valueD) {
-            case InterpreterConstants.TrueD:
-                value = InterpreterConstants.True;
-                break;
-            case InterpreterConstants.FalseD:
-                value = InterpreterConstants.False;
-                break;
-            default: return false;
-        }
-
+        value = valueD != 0? 
+                    InterpreterConstants.True :
+                    InterpreterConstants.False;
         return true;
     }
 
@@ -145,14 +138,19 @@ public class TypeConverter {
             case "<=":
             case ">=":
             case "!=":
-            case "==": return ExpressionTokenType.Operation;
-            case "=": return ExpressionTokenType.Assigment;
-            case "(": return ExpressionTokenType.LeftParenthesis;
-            case ")": return ExpressionTokenType.RightParenthesis;
-            case "[": return ExpressionTokenType.LeftBracket;
-            case "]": return ExpressionTokenType.RightBracket;
-            case ",": return ExpressionTokenType.Comma;
-            case ";": return ExpressionTokenType.Semicolon;
+            case "==":   return ExpressionTokenType.Operation;
+            case "=":    return ExpressionTokenType.Assigment;
+            case "(":    return ExpressionTokenType.LeftParenthesis;
+            case ")":    return ExpressionTokenType.RightParenthesis;
+            case "[":    return ExpressionTokenType.LeftBracket;
+            case "]":    return ExpressionTokenType.RightBracket;
+            case "if":   return ExpressionTokenType.If;
+            case "elif": return ExpressionTokenType.Elif;
+            case "else": return ExpressionTokenType.Else;
+            case ",":    return ExpressionTokenType.Separator;
+            case ":":    return ExpressionTokenType.ConditionEnd;
+            case ";":    return ExpressionTokenType.StatementEnd;
+            case "fi":   return ExpressionTokenType.IfEnd;
         }
 
         var implied = ImplyVariableType(token);
@@ -163,6 +161,22 @@ public class TypeConverter {
     
     public string LogicalBoolToBool(bool logical) {
         return logical ? InterpreterConstants.True : InterpreterConstants.False;
+    }
+    
+    public bool BoolToLogicalBool(Value val, out bool value) {
+        value = false;
+        if (val.Type != ExpressionTokenType.Bool) return false;
+
+        switch (val.Val) {
+            case InterpreterConstants.True:
+                value = true;
+                break;
+            case InterpreterConstants.False:
+                value = false;
+                break;
+            default: return false;
+        }
+        return true;
     }
     
     public bool AssignVarToName(ExpressionToken token) {
@@ -249,6 +263,10 @@ public class TypeConverter {
         return token.Type is ExpressionTokenType.Name or ExpressionTokenType.Array or ExpressionTokenType.String;
     }
     
+    public bool IsIf(ExpressionToken token) {
+        return token.Type is ExpressionTokenType.If or ExpressionTokenType.Elif or ExpressionTokenType.Else;
+    }
+    
     public bool IsReferenceOperation(Operation op) {
         var name = op.Name;
         var scope = op.Scope;
@@ -308,22 +326,6 @@ public class TypeConverter {
                    ExpressionTokenType.Name        => VariableType.Reference,
                    _                               => throw new ArgumentOutOfRangeException(nameof(tokenType), tokenType, null),
                };
-    }
-
-    private bool BoolToLogicalBool(Value val, out bool value) {
-        value = false;
-        if (val.Type != ExpressionTokenType.Bool) return false;
-
-        switch (val.Val) {
-            case InterpreterConstants.True:
-                value = true;
-                break;
-            case InterpreterConstants.False:
-                value = false;
-                break;
-            default: return false;
-        }
-        return true;
     }
 
     private List<VarValue> TokensToVarValues(List<ExpressionToken> tokens) {

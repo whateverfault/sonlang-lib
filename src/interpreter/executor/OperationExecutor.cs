@@ -35,26 +35,32 @@ public class OperationExecutor {
                 current = root;
                 break;
             }
-
+            
+            data = current.Data;
+            
             var left = current.Left?.Data;
             var right = current.Right?.Data;
+
+            var scope = OpScope.None;
+            if (left != null) scope = OpScope.Left;
+            if (right != null) scope = scope == OpScope.Left ? OpScope.LeftRight : OpScope.Right;
             
-            var operation = OperationList.GetOperation(data.Value.Val); 
-            if (data.Type == ExpressionTokenType.Assigment
+            var operation = OperationList.GetOperation(data.Value.Val, scope);
+            if (operation == null) return new Result<ExpressionToken?, Error?>(null, Error.IllegalOperation);
+            
+            if (data.Type == ExpressionTokenType.Operation
              && left == null
              && right == null) {
                 if (operation is not { Scope: OpScope.None, }) return new Result<ExpressionToken?, Error?>(null, Error.InvalidSyntax);
             }
 
-            if (current.Left != null && left?.Type is ExpressionTokenType.Assigment) {
+            if (current.Left != null && left?.Type is ExpressionTokenType.Operation) {
                 current = current.Left;
                 continue;
-            } if (current.Right != null && right?.Type is ExpressionTokenType.Assigment) {
+            } if (current.Right != null && right?.Type is ExpressionTokenType.Operation) {
                 current = current.Right;
                 continue;
             }
-            
-            if (operation?.Evaluation == null) return new Result<ExpressionToken?, Error?>(null, Error.SmthWentWrong);
             
             var evalResult = operation.Evaluation.Invoke(current.Left, current.Right);
             if (!evalResult.Ok) return new Result<ExpressionToken?, Error?>(null, evalResult.Error);

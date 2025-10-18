@@ -18,6 +18,7 @@ public enum OpScope {
 
 public enum Priority {
     SpecialLow,
+    Logic,
     Lowest,
     Low,
     High,
@@ -91,13 +92,13 @@ public static class OperationList {
                                                                             "&",
                                                                             And,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Logic
                                                                            ),
                                                               new Operation(
                                                                             "|",
                                                                             Or,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Logic
                                                                            ),
                                                               new Operation(
                                                                             "!",
@@ -115,31 +116,31 @@ public static class OperationList {
                                                                             "!=",
                                                                             NotEqual,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Logic
                                                                            ),
                                                               new Operation(
                                                                             ">",
                                                                             Greater,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Logic
                                                                            ),
                                                               new Operation(
                                                                             "<",
                                                                             Less,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Logic
                                                                            ),
                                                               new Operation(
                                                                             ">=",
                                                                             GreaterOrEqual,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Logic
                                                                            ),
                                                               new Operation(
                                                                             "<=",
                                                                             LessOrEqual,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Logic
                                                                            ),
                                                               new Operation(
                                                                             "=",

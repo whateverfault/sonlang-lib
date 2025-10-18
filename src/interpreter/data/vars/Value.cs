@@ -4,7 +4,7 @@ namespace sonlanglib.interpreter.data.vars;
 
 public class Value {
     public string Val;
-    public readonly ExpressionTokenType Type;
+    public ExpressionTokenType Type;
 
 
     public Value(string val, ExpressionTokenType type) {
