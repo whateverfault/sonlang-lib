@@ -263,7 +263,7 @@ public class TypeConverter {
         return token.Type is ExpressionTokenType.Name or ExpressionTokenType.Array or ExpressionTokenType.String;
     }
     
-    public bool IsIf(ExpressionToken token) {
+    public bool IsIfStatement(ExpressionToken token) {
         return token.Type is ExpressionTokenType.If or ExpressionTokenType.Elif or ExpressionTokenType.Else;
     }
     

@@ -110,13 +110,13 @@ public class TokenParser {
         
         for (var i = pos; i < nodes.Count;) {
             var data = nodes[i].Data;
-            if (!Converter.IsIf(data)) {
+            if (!Converter.IsIfStatement(data)) {
                 wasIf = false;
                 ++i;
                 continue;
             } if (data.Type == ExpressionTokenType.If) wasIf = true;
             
-            if (Converter.IsIf(data) && wasIf == false) return new Result<List<BinaryTreeNode<ExpressionToken>>, Error?>(null, Error.InvalidSyntax);
+            if (Converter.IsIfStatement(data) && wasIf == false) return new Result<List<BinaryTreeNode<ExpressionToken>>, Error?>(null, Error.InvalidSyntax);
 
             var condition = true;
             if (data.Type != ExpressionTokenType.Else) {
@@ -149,7 +149,7 @@ public class TokenParser {
                 if (i >= nodes.Count) break;
                 data = nodes[i].Data;
                 
-                while (Converter.IsIf(data)) {
+                while (Converter.IsIfStatement(data)) {
                     nodes.RemoveAt(i);
                     
                     if (i >= nodes.Count) break;

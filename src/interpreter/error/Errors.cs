@@ -9,7 +9,7 @@ public enum Error {
     UnknownIdentifier,
     IllegalOperation,
     InvalidSyntax,
-    OutOfBound,
+    OutOfBounds,
 }
 
 internal static class Errors {

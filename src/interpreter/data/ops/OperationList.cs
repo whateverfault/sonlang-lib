@@ -19,6 +19,7 @@ public enum OpScope {
 public enum Priority {
     SpecialLow,
     Logic,
+    Compare,
     Lowest,
     Low,
     High,
@@ -110,37 +111,37 @@ public static class OperationList {
                                                                             "==",
                                                                             Equal,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Low
+                                                                            Priority.Compare
                                                                            ),
                                                               new Operation(
                                                                             "!=",
                                                                             NotEqual,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Logic
+                                                                            Priority.Compare
                                                                            ),
                                                               new Operation(
                                                                             ">",
                                                                             Greater,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Logic
+                                                                            Priority.Compare
                                                                            ),
                                                               new Operation(
                                                                             "<",
                                                                             Less,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Logic
+                                                                            Priority.Compare
                                                                            ),
                                                               new Operation(
                                                                             ">=",
                                                                             GreaterOrEqual,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Logic
+                                                                            Priority.Compare
                                                                            ),
                                                               new Operation(
                                                                             "<=",
                                                                             LessOrEqual,
                                                                             OpScope.LeftRight,
-                                                                            Priority.Logic
+                                                                            Priority.Compare
                                                                            ),
                                                               new Operation(
                                                                             "=",
@@ -198,39 +199,71 @@ public static class OperationList {
          || _interpreter == null
          || Calculator == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
         if (left == null || right == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InvalidSyntax);
-        
-        if (left.Data.Type != ExpressionTokenType.Name) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
-        
-        var result = Calculator.Calculate(new BinaryTree<ExpressionToken>(right));
-        if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
-        if (result.Value == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
 
-        right.Data = result.Value;
-        if (right.Data.Type != ExpressionTokenType.Number) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
-        
-        var variable = _interpreter.GetVariable(left.Data.Value.Val);
-        if (variable == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.UnknownIdentifier);
-
+        var leftToken = left.Data;
         if (!Converter.ToNumber(right.Data.Value, out var indexDouble)) {
             return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
         }
 
         indexDouble = double.Round(indexDouble);
         var index = (int)indexDouble;
-        var value = variable.Value;
         
-        switch (variable.Type) {
-            case VariableType.Array: {
-                if (index < 0 || index >= value.Next.Count) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.OutOfBound);
-                value = value.Next[index];
-                right.Data = Converter.VarValueToToken(value);
-                break;
-            } case VariableType.String: {
-                var c = value.Value.Val[index];
-                right.Data = new ExpressionToken(c.ToString(), ExpressionTokenType.String);
-                break;
-            } default: return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        if (leftToken.Type == ExpressionTokenType.Name) {
+            var result = Calculator.Calculate(new BinaryTree<ExpressionToken>(right));
+            if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
+            if (result.Value == null)
+                return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.SmthWentWrong);
+
+            right.Data = result.Value;
+            if (right.Data.Type != ExpressionTokenType.Number)
+                return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+
+            var variable = _interpreter.GetVariable(left.Data.Value.Val);
+            if (variable == null)
+                return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.UnknownIdentifier);
+
+            var value = variable.Value;
+        
+            var lenght = variable.Type == VariableType.Array? 
+                             variable.Value.Next.Count :
+                             variable.Value.Value.Val.Length;
+            if (index < 0 || index >= lenght) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.OutOfBounds);
+            
+            switch (variable.Type) {
+                case VariableType.Array: {
+                    value = value.Next[index];
+                    right.Data = Converter.VarValueToToken(value);
+                    break;
+                } case VariableType.String: {
+                    var c = value.Value.Val[index];
+                    right.Data = new ExpressionToken(c.ToString(), ExpressionTokenType.String);
+                    break;
+                } default: return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+            }
         }
+        else {
+            if (leftToken.Type != ExpressionTokenType.Array && leftToken.Type != ExpressionTokenType.String) {
+                return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+            }
+            
+            var lenght = leftToken.Type == ExpressionTokenType.Array? 
+                             leftToken.Next.Count :
+                             leftToken.Value.Val.Length;
+            if (index < 0 || index >= lenght) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.OutOfBounds);
+            
+            switch (leftToken.Type) {
+                case ExpressionTokenType.Array: {
+                    leftToken = leftToken.Next[index];
+                    right.Data = leftToken;
+                    break;
+                } case ExpressionTokenType.String: {
+                    var c = leftToken.Value.Val[index];
+                    right.Data = new ExpressionToken(c.ToString(), ExpressionTokenType.String);
+                    break;
+                } default: return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+            }
+        }
+        
         return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(right), null);
     }
     
@@ -416,6 +449,14 @@ public static class OperationList {
     private static Result<BinaryTree<ExpressionToken>?, Error?> Equal(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
         if (Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
         if (right == null || left == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+
+        if (Converter.IsLiteral(left.Data) && Converter.IsLiteral(right.Data)) {
+            var lStr = left.Data.Value.Val;
+            var rStr = right.Data.Value.Val;
+            
+            var resultToken = new ExpressionToken(Converter.LogicalBoolToBool(lStr.Equals(rStr, StringComparison.InvariantCulture)), ExpressionTokenType.Bool);
+            return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(resultToken), null);
+        }
         
         var result = Converter.ParseNumbers(left, right);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
@@ -432,6 +473,14 @@ public static class OperationList {
     private static Result<BinaryTree<ExpressionToken>?, Error?> NotEqual(BinaryTreeNode<ExpressionToken>? left, BinaryTreeNode<ExpressionToken>? right) {
         if (Converter == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.InterpreterNotInitialized);
         if (right == null || left == null) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, Error.IllegalOperation);
+        
+        if (Converter.IsLiteral(left.Data) && Converter.IsLiteral(right.Data)) {
+            var lStr = left.Data.Value.Val;
+            var rStr = right.Data.Value.Val;
+            
+            var resultToken = new ExpressionToken(Converter.LogicalBoolToBool(!lStr.Equals(rStr, StringComparison.InvariantCulture)), ExpressionTokenType.Bool);
+            return new Result<BinaryTree<ExpressionToken>?, Error?>(new BinaryTree<ExpressionToken>(resultToken), null);
+        }
         
         var result = Converter.ParseNumbers(left, right);
         if (!result.Ok) return new Result<BinaryTree<ExpressionToken>?, Error?>(null, result.Error);
